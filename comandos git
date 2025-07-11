@@ -1,0 +1,17 @@
+# Ver status das mudanças
+git status
+
+# Adicionar mudanças
+git add .
+
+# Fazer commit
+git commit -m "Descrição das mudanças"
+
+# Enviar para GitHub
+git push
+
+# Baixar mudanças do GitHub
+git pull
+
+# Ver histórico
+git log --oneline

@@ -4,6 +4,7 @@ import Settings from './pages/Settings';
 import Reports from './pages/Reports';
 import Layout from './components/Layout';
 import './App.css';
+import BotTest from './pages/BotTest';
 
 function App() {
   console.log('🚀 App.jsx renderizado');
@@ -19,6 +20,7 @@ function App() {
             <Route path="/reports" element={<Reports />} />
             <Route path="/users" element={<Dashboard />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/bottest" element={<BotTest />} />
           </Routes>
         </Layout>
       </div>

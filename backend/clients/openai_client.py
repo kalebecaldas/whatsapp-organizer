@@ -61,6 +61,19 @@ tools: list[ChatCompletionToolParam] = [
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_particular_values",
+            "description": "Retorna os valores/preços dos procedimentos particulares quando o usuário pergunta sobre custos.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "procedimento": {"type": "string", "description": "O nome do procedimento específico sobre o qual o usuário está perguntando (ex: 'fisioterapia', 'acupuntura')."}
+                }
+            }
+        }
     }
 ]
 

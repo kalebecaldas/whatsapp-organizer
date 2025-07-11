@@ -97,7 +97,15 @@ def call(function_name: str, args: dict) -> dict:
 
         if function_name == "get_patient_data":  # ✅ Novo bloco
             headers = headers_common | {"content-type": "application/x-www-form-urlencoded"}
-            payload = {"numero_paciente": int(args.get("numero_paciente"))}
+            valor_numero = args.get("numero_paciente")
+            if valor_numero is None:
+                logging.error(f"numero_paciente ausente: {valor_numero}")
+                return {"erro": "numero_paciente ausente", "funcao": function_name}
+            try:
+                payload = {"numero_paciente": int(valor_numero)}
+            except (TypeError, ValueError):
+                logging.error(f"Valor inválido para numero_paciente: {valor_numero}")
+                return {"erro": "numero_paciente inválido", "funcao": function_name}
             res = requests.post(f"{BASE_URL}/patient_data", data=payload, headers=headers)
             return res.json() if res.ok else erro_response(res)
 

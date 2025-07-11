@@ -57,7 +57,15 @@ def process(texto, dados, session_data):
         else:
             # Se não encontrou, direciona para o fluxo de paciente não cadastrado
             print("⚠️ Paciente não encontrado. Direcionando para cadastro.")
-            return "⚠️ Não encontramos seu cadastro em nosso sistema. Vamos fazer um pré-cadastro rápido.", dados, "paciente_nao_cadastrado"
+            return (
+                "⚠️ Não encontramos seu cadastro em nosso sistema. Vamos fazer um pré-cadastro rápido.\n\n"
+                "❓ Opção inválida. Por favor, escolha:\n\n"
+                "1️⃣ **Fazer cadastro online** (recomendado)\n"
+                "2️⃣ **Falar com atendente**\n\n"
+                "Qual opção você prefere?",
+                dados,
+                "paciente_nao_cadastrado"
+            )
             
     # Pré-carrega os procedimentos disponíveis para o convênio do paciente
     convenio_id_paciente = dados.get("paciente", {}).get("convenio_id")

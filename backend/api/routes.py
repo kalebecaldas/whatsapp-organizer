@@ -338,3 +338,14 @@ def migrate_messages():
     except Exception as e:
         logger.error(f"❌ Error migrating messages: {e}")
         return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/test-bot', methods=['POST'])
+@cross_origin()
+def test_bot():
+    data = request.get_json()
+    numero = data.get('numero')
+    mensagem = data.get('mensagem')
+    if not numero or not mensagem:
+        return jsonify({'erro': 'Número e mensagem são obrigatórios.'}), 400
+    resposta = handle_message(numero, mensagem)
+    return jsonify({'resposta': resposta})

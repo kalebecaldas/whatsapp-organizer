@@ -4,7 +4,8 @@ from textwrap import dedent
 from clinicaagil_client import call
 from clients.openai_client import chat_with_functions
 from handlers.etapa_perguntar_unidade import process as etapa_perguntar_unidade
-from core.paciente_utils import buscar_paciente
+from core.paciente_utils import buscar_paciente, precarregar_agendamento_para_paciente
+from data.convenios import CONVENIOS, PARTICULAR_VALORES, PARTICULAR_REGRAS
 
 def remover_acentos(texto):
     return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
@@ -14,16 +15,21 @@ def process(texto, dados, session_data):
         paciente_encontrado = buscar_paciente(session_data.get("from_number"))
         if paciente_encontrado:
             dados["paciente"] = paciente_encontrado
+            # Pré-carregar agendamento para paciente cadastrado
+            from clinicaagil_client import call
+            dados["agendamento_precarregado"] = precarregar_agendamento_para_paciente(paciente_encontrado, call)
 
     nome_paciente = dados.get("paciente", {}).get("paciente_nome")
     historico = session_data.get("historico", [])
     
-    contexto_sistema = """Você é um assistente virtual da clínica IAAM. Sua função é entender a solicitação do usuário e chamar a função apropriada para respondê-lo.
+    contexto_sistema = """
+Você é um consultor de vendas da clínica IAAM, especializado em transformar contatos em agendamentos. Sua função é entender a necessidade do usuário e oferecer soluções personalizadas.
 
 FUNÇÕES DISPONÍVEIS:
 1. iniciar_agendamento: Use quando o usuário quer agendar uma consulta
 2. get_insurance_data: Use quando o usuário pergunta sobre convênios/planos de saúde
 3. get_clinic_data: Use quando o usuário pergunta sobre localização, endereço, telefone das clínicas
+4. get_particular_values: Use quando o usuário pergunta sobre valores/preços particulares
 
 EXEMPLOS DE USO:
 - "Quero agendar" → iniciar_agendamento
@@ -31,8 +37,33 @@ EXEMPLOS DE USO:
 - "Onde fica a clínica?" → get_clinic_data
 - "Localização da unidade Vieiralves" → get_clinic_data com unidade="Vieiralves"
 - "Telefone da clínica" → get_clinic_data
+- "Quanto custa fisioterapia?" → get_particular_values com procedimento="fisioterapia"
+- "Qual o valor da acupuntura?" → get_particular_values com procedimento="acupuntura"
+- "Preço particular" → get_particular_values
+- "Quanto custa fisioterapia ortopédica?" → get_particular_values com procedimento="fisioterapia ortopédica"
 
-IMPORTANTE: Sempre use as funções quando apropriado. Não responda diretamente sem chamar uma função."""
+IMPORTANTE: 
+- Sempre use as funções quando apropriado. Não responda diretamente sem chamar uma função.
+- Para perguntas sobre valores, seja específico sobre qual procedimento o usuário está perguntando.
+- Se o usuário perguntar sobre "fisioterapia" de forma genérica, use get_particular_values com procedimento="fisioterapia" para mostrar todas as opções.
+- SEMPRE termine suas respostas com uma pergunta ou call-to-action para manter a conversa fluindo.
+
+PERFIL DE ATENDIMENTO:
+Você é um consultor de vendas humanizado que:
+- Foca em entender a DOR do paciente (física ou emocional)
+- Apresenta BENEFÍCIOS antes de preços
+- Oferece SOLUÇÕES personalizadas
+- Faz PERGUNTAS para qualificar o lead
+- Termina sempre com um CALL-TO-ACTION
+- Usa linguagem acolhedora e empática
+- Transforma objeções em oportunidades
+- Conduz naturalmente para o agendamento
+
+EXEMPLOS DE ABORDAGEM:
+- "Entendo que você está com dor nas costas. A fisioterapia ortopédica pode te ajudar muito com isso..."
+- "A acupuntura é excelente para o que você está sentindo. Quer que eu te explique como funciona?"
+- "Posso te ajudar a agendar uma avaliação para entendermos melhor seu caso?"
+"""
     
     if nome_paciente:
         contexto_sistema += f" Você já sabe que está falando com {nome_paciente.split()[0]}."
@@ -83,58 +114,174 @@ IMPORTANTE: Sempre use as funções quando apropriado. Não responda diretamente
                     respostas_para_enviar.append("Tive um problema ao consultar as informações de convênios.")
             
             elif nome_funcao == "get_clinic_data":
-                # Lógica para informações das clínicas (endereço, telefone, etc.)
+                # Lógica para dados das clínicas
                 try:
                     clinicas_response = call("get_clinic_data", {})
                     clinicas = clinicas_response.get("clinicas", [])
-                    unidade_solicitada = remover_acentos(argumentos.get("unidade", "").lower())
+                    unidade_especifica = argumentos.get("unidade", "").lower()
                     
-                    if unidade_solicitada:
+                    if unidade_especifica:
                         # Busca clínica específica
                         clinica_encontrada = None
                         for clinica in clinicas:
-                            nome_clinica = remover_acentos(clinica.get("nome", "").lower())
-                            if unidade_solicitada in nome_clinica:
+                            if unidade_especifica in clinica.get("nome", "").lower():
                                 clinica_encontrada = clinica
                                 break
                         
                         if clinica_encontrada:
-                            nome = clinica_encontrada.get("nome", "Clínica")
-                            endereco = clinica_encontrada.get("endereco", "Endereço não informado")
-                            telefone = clinica_encontrada.get("telefone", "Telefone não informado")
-                            
-                            resposta_clinica = dedent(f"""\
-                                📍 *{nome}*
+                            respostas_para_enviar.append(dedent(f"""\
+                                📍 **{clinica_encontrada['nome']}**
                                 
-                                🏠 *Endereço:* {endereco}
-                                📞 *Telefone:* {telefone}
-                                
-                                Precisa de mais alguma informação?
-                            """).strip()
-                            respostas_para_enviar.append(resposta_clinica)
+                                📞 **Telefone:** {clinica_encontrada['telefone']}
+                                🏠 **Endereço:** {clinica_encontrada['endereco']}
+                            """).strip())
                         else:
-                            respostas_para_enviar.append(f"Não encontrei informações sobre a unidade '{argumentos.get('unidade')}'. Posso te ajudar com outras informações?")
+                            respostas_para_enviar.append("Não encontrei essa unidade específica.")
                     else:
                         # Lista todas as clínicas
-                        lista_clinicas = []
-                        for clinica in clinicas:
-                            nome = clinica.get("nome", "Clínica")
-                            endereco = clinica.get("endereco", "Endereço não informado")
-                            telefone = clinica.get("telefone", "Telefone não informado")
-                            lista_clinicas.append(f"📍 *{nome}*\n🏠 {endereco}\n📞 {telefone}")
-                        
-                        resposta_todas = dedent(f"""\
-                            🏥 *Nossas Unidades:*
+                        lista_clinicas = "\n\n".join([
+                            f"📍 **{c['nome']}**\n📞 {c['telefone']}\n🏠 {c['endereco']}"
+                            for c in clinicas
+                        ])
+                        respostas_para_enviar.append(dedent(f"""\
+                            📍 **Nossas Unidades:**
                             
-                            {chr(10).join(lista_clinicas)}
-                            
-                            Qual unidade você gostaria de saber mais sobre?
-                        """).strip()
-                        respostas_para_enviar.append(resposta_todas)
-                        
+                            {lista_clinicas}
+                        """).strip())
                 except Exception as e:
                     print(f"❌ Erro na lógica de clínicas: {e}")
                     respostas_para_enviar.append("Tive um problema ao consultar as informações das clínicas.")
+            
+            elif nome_funcao == "get_particular_values":
+                # Lógica para valores particulares com abordagem de vendas
+                try:
+                    procedimento_especifico = argumentos.get("procedimento", "").lower()
+                    
+                    # Detectar se é uma pergunta genérica sobre fisioterapia
+                    if procedimento_especifico in ["fisioterapia", "fisio", "fisioterapia ortopédica", "fisioterapia neurológica", "fisioterapia respiratória", "fisioterapia pélvica"]:
+                        # Se for genérico, mostrar opções com abordagem consultiva
+                        fisioterapias = {
+                            "FISIOTERAPIA ORTOPEDICA": 90.00,
+                            "FISIOTERAPIA NEUROLOGICA": 100.00,
+                            "FISIOTERAPIA RESPIRATORIA": 100.00,
+                            "FISIOTERAPIA PELVICA": 220.00
+                        }
+                        
+                        lista_fisioterapias = "\n".join([
+                            f"• {proc.replace('_', ' ').title()}: R$ {valor:.2f}"
+                            for proc, valor in fisioterapias.items()
+                        ])
+                        
+                        respostas_para_enviar.append(dedent(f"""\
+                            💪 **Fisioterapia - Recupere sua qualidade de vida!**
+                            
+                            Temos especialidades específicas para cada necessidade:
+                            
+                            {lista_fisioterapias}
+                            
+                            **Qual área você gostaria de tratar?** 
+                            Posso te explicar como cada uma pode te ajudar especificamente.
+                        """).strip())
+                        
+                    elif procedimento_especifico in ["acupuntura", "acup"]:
+                        # Abordagem consultiva para acupuntura
+                        respostas_para_enviar.append(dedent(f"""\
+                            🌟 **Acupuntura - Equilíbrio natural para seu bem-estar!**
+                            
+                            A acupuntura é excelente para:
+                            • Alívio de dores crônicas
+                            • Redução de estresse e ansiedade
+                            • Melhora na qualidade do sono
+                            • Tratamento de enxaquecas
+                            
+                            **Investimento:**
+                            💳 **Avaliação inicial:** R$ 200,00 (essencial para personalizar seu tratamento)
+                            💵 **Sessões:** R$ 180,00 cada
+                            
+                            **Dica:** Na primeira consulta fazemos uma avaliação completa para entender suas necessidades específicas. Quer agendar sua avaliação?
+                        """).strip())
+                        
+                    elif procedimento_especifico in ["fisioterapia pélvica", "fisioterapia pelvica", "pelvica"]:
+                        # Abordagem consultiva para fisioterapia pélvica
+                        respostas_para_enviar.append(dedent(f"""\
+                            🌸 **Fisioterapia Pélvica - Cuidado especializado para sua saúde íntima!**
+                            
+                            Ideal para:
+                            • Incontinência urinária
+                            • Dores pélvicas
+                            • Recuperação pós-parto
+                            • Problemas de próstata
+                            
+                            **Investimento:**
+                            💳 **Avaliação especializada:** R$ 250,00 (diagnóstico completo)
+                            💵 **Sessões:** R$ 220,00 cada
+                            
+                            **Por que a avaliação é importante?** Ela nos permite criar um tratamento personalizado para seu caso específico.
+                            
+                            Quer agendar sua avaliação? Posso te ajudar a escolher um horário.
+                        """).strip())
+                        
+                    elif procedimento_especifico in ["fisioterapia ortopédica", "fisioterapia ortopedica", "ortopédica", "ortopedica"]:
+                        # Abordagem consultiva para fisioterapia ortopédica
+                        respostas_para_enviar.append(dedent(f"""\
+                            🦴 **Fisioterapia Ortopédica - Recupere sua mobilidade!**
+                            
+                            Perfeita para:
+                            • Dores nas costas, joelhos, ombros
+                            • Recuperação pós-cirúrgica
+                            • Lesões esportivas
+                            • Melhora da postura
+                            
+                            **Investimento:**
+                            💳 **Parcelado:** 3x de R$ 30,00
+                            💵 **À vista:** R$ 90,00
+                            
+                            **Diferencial:** Nossos fisioterapeutas são especializados e usam técnicas modernas para acelerar sua recuperação.
+                            
+                            Quer agendar sua primeira sessão? Posso te ajudar a escolher um horário que funcione para você.
+                        """).strip())
+                        
+                    else:
+                        # Busca valor específico com abordagem consultiva
+                        valor_encontrado = None
+                        for proc, valor in PARTICULAR_VALORES.items():
+                            if procedimento_especifico in proc.lower():
+                                valor_encontrado = (proc, valor)
+                                break
+                        
+                        if valor_encontrado:
+                            proc_nome, valor = valor_encontrado
+                            respostas_para_enviar.append(dedent(f"""\
+                                💰 **{proc_nome} - Investimento na sua saúde!**
+                                
+                                **Valores:**
+                                💳 **Parcelado:** 3x de R$ {valor/3:.2f}
+                                💵 **À vista:** R$ {valor:.2f}
+                                
+                                **Por que escolher a IAAM?**
+                                • Profissionais especializados
+                                • Equipamentos modernos
+                                • Atendimento personalizado
+                                
+                                Quer agendar sua consulta? Posso te ajudar a escolher um horário.
+                            """).strip())
+                        else:
+                            # Lista todos os valores com abordagem consultiva
+                            lista_valores = "\n".join([
+                                f"• {proc}: R$ {valor:.2f}"
+                                for proc, valor in PARTICULAR_VALORES.items()
+                            ])
+                            respostas_para_enviar.append(dedent(f"""\
+                                💰 **Nossos Procedimentos - Cuidado completo para você!**
+                                
+                                {lista_valores}
+                                
+                                **Qual procedimento você tem interesse?** 
+                                Posso te explicar como cada um pode te ajudar especificamente e te ajudar a agendar.
+                            """).strip())
+                except Exception as e:
+                    print(f"❌ Erro na lógica de valores: {e}")
+                    respostas_para_enviar.append("Tive um problema ao consultar os valores particulares.")
         
         if proxima_etapa == "inicio" and respostas_para_enviar:
             respostas_para_enviar.append("\nPosso te ajudar com mais alguma coisa?")
