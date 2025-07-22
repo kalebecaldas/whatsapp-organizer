@@ -1,15 +1,38 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useChat } from '../context/ChatContext';
+import { Users, X, RotateCcw, ArrowRight, Upload, Check } from 'lucide-react';
 import './ChatWindow.css';
 
 const ChatWindow = () => {
-  const { selectedConversation, messages, loading } = useChat();
+  const { selectedConversation, messages, loading, refreshConversations } = useChat();
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const [isScrolledToBottom, setIsScrolledToBottom] = useState(true);
   const [hasScrolledUp, setHasScrolledUp] = useState(false);
   const [showTypingIndicator, setShowTypingIndicator] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  // Função para recarregar conversas após ações
+  const reloadConversations = async () => {
+    try {
+      console.log('🔄 Recarregando conversas após ação...');
+      
+      // Forçar recarregamento completo
+      await refreshConversations();
+      
+      // Aguardar um pouco para garantir que os dados foram atualizados
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      console.log('✅ Conversas recarregadas após ação');
+      
+      // Forçar uma nova renderização do componente
+      console.log('🔄 Forçando atualização da interface...');
+      
+    } catch (error) {
+      console.error('❌ Erro ao recarregar conversas:', error);
+    }
+  };
 
   const scrollToBottom = useCallback((behavior = 'auto') => {
     if (messagesEndRef.current) {
@@ -119,6 +142,162 @@ const ChatWindow = () => {
   // Renderizar botão de scroll apenas se o usuário rolou para cima
   const shouldShowScrollButton = showScrollButton && messages.length > 0;
 
+  // Funções de ação para conversas
+  const handleTransferConversation = async () => {
+    if (!selectedConversation || actionLoading) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/conversation-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          action: 'transfer',
+          targetUserId: 'current-user-id'
+        })
+      });
+
+      if (response.ok) {
+        console.log('Conversa transferida com sucesso');
+        // Aqui você pode adicionar lógica para atualizar a interface
+        await reloadConversations();
+      }
+    } catch (error) {
+      console.error('Erro ao transferir conversa:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCloseConversation = async () => {
+    if (!selectedConversation || actionLoading) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/conversation-actions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          action: 'close'
+        })
+      });
+
+      if (response.ok) {
+        console.log('Conversa fechada com sucesso');
+        // Aqui você pode adicionar lógica para atualizar a interface
+        await reloadConversations();
+      }
+    } catch (error) {
+      console.error('Erro ao fechar conversa:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReturnToQueue = async () => {
+    if (!selectedConversation || actionLoading) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/return-to-global-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          phone: selectedConversation.phone
+        })
+      });
+
+      if (response.ok) {
+        console.log('Conversa retornada para fila global com sucesso');
+        // Atualizar a interface - remover atribuição da conversa
+        // Aqui você pode adicionar lógica para atualizar a lista de conversas
+        // Por exemplo, recarregar as conversas ou atualizar o estado
+        await reloadConversations();
+      }
+    } catch (error) {
+      console.error('Erro ao retornar conversa para fila global:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTakeConversation = async () => {
+    console.log('🔄 handleTakeConversation chamado para:', selectedConversation?.id);
+    if (!selectedConversation || actionLoading) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/transfer-conversation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          userId: 'current-user-id'
+        })
+      });
+
+      console.log('📡 Resposta da API transfer-conversation:', response.status, response.statusText);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Conversa transferida para atendimento humano com sucesso:', result);
+        await reloadConversations();
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Erro na resposta:', response.status, response.statusText, errorData);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao transferir conversa para atendimento humano:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddToGlobalQueue = async () => {
+    console.log('🔄 handleAddToGlobalQueue chamado para:', selectedConversation?.id);
+    if (!selectedConversation || actionLoading) return;
+    
+    setActionLoading(true);
+    try {
+      const response = await fetch('/api/add-to-global-queue', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversationId: selectedConversation.id,
+          phone: selectedConversation.phone || selectedConversation.id
+        })
+      });
+
+      console.log('📡 Resposta da API add-to-global-queue:', response.status, response.statusText);
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Conversa adicionada à fila global com sucesso:', result);
+        await reloadConversations();
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Erro na resposta:', response.status, response.statusText, errorData);
+      }
+    } catch (error) {
+      console.error('❌ Erro ao adicionar conversa à fila global:', error);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Optimize message rendering with smooth animations
   const renderMessage = (message, index) => {
     return (
@@ -168,16 +347,108 @@ const ChatWindow = () => {
             <span className="contact-status">
               {selectedConversation.isOnline ? 'online' : 'offline'}
             </span>
+            {/* Indicador de área */}
+            <span className={`area-indicator ${selectedConversation.transferido_humano ? 'human' : 'bot'}`}>
+              {selectedConversation.transferido_humano ? '👥 Atendimento Humano' : '🤖 Bot'}
+            </span>
           </div>
         </div>
-        <div className="chat-actions">
-          <button className="icon-button" title="Buscar">
-            🔍
-          </button>
-          <button className="icon-button" title="Mais opções">
-            ⋮
+        
+        {/* Action Buttons */}
+        <div className="chat-action-buttons">
+          {console.log('🔍 Estado da conversa:', {
+            id: selectedConversation?.id,
+            transferido_humano: selectedConversation?.transferido_humano,
+            atribuido_para: selectedConversation?.atribuido_para
+          })}
+          
+          {/* BOT AREA - Botões específicos para conversas do bot */}
+          {selectedConversation && !selectedConversation.transferido_humano && (
+            <>
+              <button 
+                className={`action-button transfer-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleTransferConversation}
+                disabled={actionLoading}
+                aria-label="Transferir conversa para outro usuário"
+              >
+                <Users size={20} />
+              </button>
+              
+              <button 
+                className={`action-button take-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleTakeConversation}
+                disabled={actionLoading}
+                aria-label="Pegar conversa para atendimento humano"
+              >
+                <ArrowRight size={20} />
+              </button>
+              
+              <button 
+                className={`action-button add-to-queue-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleAddToGlobalQueue}
+                disabled={actionLoading}
+                aria-label="Enviar conversa para fila global"
+              >
+                <Upload size={20} />
+              </button>
+              
+              <button 
+                className={`action-button close-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleCloseConversation}
+                disabled={actionLoading}
+                aria-label="Encerrar conversa"
+              >
+                <X size={20} />
+              </button>
+            </>
+          )}
+          
+          {/* HUMAN AREA - Botões específicos para conversas de atendimento humano */}
+          {selectedConversation && selectedConversation.transferido_humano && (
+            <>
+              <button 
+                className={`action-button transfer-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleTransferConversation}
+                disabled={actionLoading}
+                aria-label="Transferir conversa para outro atendente"
+              >
+                <Users size={20} />
+              </button>
+              
+              <button 
+                className={`action-button return-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleReturnToQueue}
+                disabled={actionLoading}
+                aria-label="Retornar conversa para fila global"
+              >
+                <RotateCcw size={20} />
+              </button>
+              
+              <button 
+                className={`action-button close-btn ${actionLoading ? 'loading' : ''}`}
+                onClick={handleCloseConversation}
+                disabled={actionLoading}
+                aria-label="Encerrar conversa"
+              >
+                <X size={20} />
+              </button>
+            </>
+          )}
+          
+          {/* Botão de teste - remover depois */}
+          <button 
+            className="action-button test-btn"
+            onClick={() => console.log('🎯 Botão de teste clicado! Estado:', {
+              transferido_humano: selectedConversation?.transferido_para,
+              atribuido_para: selectedConversation?.atribuido_para
+            })}
+            aria-label="Botão de teste"
+          >
+            <Check size={20} />
           </button>
         </div>
+        
+
       </div>
 
       {/* Messages Container */}

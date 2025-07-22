@@ -49,7 +49,13 @@ CORS(app, resources={
 })
 
 # Configurar SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(
+    app, 
+    cors_allowed_origins="*", 
+    async_mode='threading',
+    logger=True,
+    engineio_logger=True
+)
 
 # Blueprints
 app.register_blueprint(api_bp, url_prefix="/api")
@@ -126,12 +132,12 @@ def webhook():
 @socketio.on('connect')
 def handle_connect():
     """Handle WebSocket connection"""
-    logger.info("Cliente conectado via WebSocket")
+    logger.info("🔌 Cliente conectado via WebSocket")
 
 @socketio.on('disconnect')
 def handle_disconnect():
     """Handle WebSocket disconnection"""
-    logger.info("Cliente desconectado via WebSocket")
+    logger.info("🔌 Cliente desconectado via WebSocket")
 
 @socketio.on('join_conversation')
 def handle_join_conversation(data):

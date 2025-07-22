@@ -16,8 +16,18 @@ def process(texto, dados, session_data):
         if paciente_encontrado:
             dados["paciente"] = paciente_encontrado
             # Pré-carregar agendamento para paciente cadastrado
-            from clinicaagil_client import call
             dados["agendamento_precarregado"] = precarregar_agendamento_para_paciente(paciente_encontrado, call)
+            
+            # PACIENTE CADASTRADO - Repassar para atendimento humano
+            return (
+                "👋 Olá! Identificamos que você já é nosso paciente cadastrado.\n\n"
+                "Para melhor atendê-lo, vou transferir você para nossa equipe de atendimento humano.\n\n"
+                "⏰ **Tempo médio de resposta:** 2-5 minutos\n"
+                "📱 **Canal:** WhatsApp\n\n"
+                "Obrigado pela paciência! 😊",
+                dados,
+                "transferir_humano"
+            )
 
     nome_paciente = dados.get("paciente", {}).get("paciente_nome")
     historico = session_data.get("historico", [])

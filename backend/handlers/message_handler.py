@@ -15,6 +15,7 @@ from handlers.etapa_feedback import process as etapa_feedback
 from handlers.etapa_encerrado import process as etapa_encerrado
 from handlers.etapa_padrao import process as etapa_padrao
 from handlers.etapa_ajuda_procedimento import process as etapa_ajuda_procedimento
+from handlers.etapa_transferir_humano import process as etapa_transferir_humano
 from core.intention_detector import detectar_mudanca_intencao, processar_mudanca_intencao
 
 ETAPAS_MAPEAMENTO = {
@@ -31,6 +32,7 @@ ETAPAS_MAPEAMENTO = {
     "encerrado": etapa_encerrado,
     "padrao": etapa_padrao,
     "ajuda_procedimento": etapa_ajuda_procedimento,
+    "transferir_humano": etapa_transferir_humano,
 }
 
 def normalizar_numero(telefone: str) -> str:

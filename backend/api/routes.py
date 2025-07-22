@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 import logging
 import requests
+from session_store import get_session, set_session
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,23 @@ def init_socketio(sio):
     global socketio
     socketio = sio
 
+# Variável global para controlar debounce
+_last_emit_time = 0
+
 def emit_message_update():
     """Função auxiliar para emitir atualização de mensagens via WebSocket"""
+    global _last_emit_time
+    
     if not socketio:
         return
+    
+    # Debounce para evitar múltiplas emissões em sequência
+    import time
+    current_time = time.time()
+    if current_time - _last_emit_time < 1.0:  # 1 segundo de debounce
+        logger.info("⏸️ Debounce: ignorando emissão muito rápida")
+        return
+    _last_emit_time = current_time
         
     try:
         # Get updated conversations
@@ -171,7 +185,9 @@ def get_messages():
                     'phone': phone,
                     'messages': [],
                     'last_message': '',
-                    'last_timestamp': None
+                    'last_timestamp': None,
+                    'transferido_humano': False,  # Default value
+                    'dados_transferencia': None
                 }
             
             # Add message to conversation
@@ -187,6 +203,40 @@ def get_messages():
             if not conversations[phone]['last_timestamp'] or msg['timestamp'] > conversations[phone]['last_timestamp']:
                 conversations[phone]['last_message'] = msg['message_text']
                 conversations[phone]['last_timestamp'] = msg['timestamp']
+        
+        # Check for transfer data in session store
+        for phone in conversations:
+            session_data = get_session(phone)
+            logger.info(f"📋 Verificando sessão para {phone}: {session_data}")
+            
+            # Garantir que os campos sempre existam
+            conversations[phone]['transferido_humano'] = False  # Default
+            conversations[phone]['atribuido_para'] = None  # Default
+            conversations[phone]['dados_transferencia'] = None  # Default
+            
+            if session_data and session_data.get('dados', {}).get('transferido_humano'):
+                conversations[phone]['transferido_humano'] = True
+                conversations[phone]['dados_transferencia'] = session_data.get('dados', {}).get('dados_transferencia')
+                conversations[phone]['atribuido_para'] = session_data.get('dados', {}).get('atribuido_para')
+                logger.info(f"✅ Conversa {phone} transferida para humano: {conversations[phone]['transferido_humano']}, atribuída para: {conversations[phone]['atribuido_para']}")
+            else:
+                logger.info(f"📝 Conversa {phone} permanece no bot (não transferida)")
+        
+        # Adicionar campos obrigatórios para cada conversa
+        for conv in conversations.values():
+            conv['id'] = conv['phone']  # Garantir que id existe
+            conv['name'] = extract_name_from_phone(conv['phone']) or f"Paciente {conv['phone']}"
+            conv['avatar'] = generate_avatar(conv['phone'])
+            conv['formattedPhone'] = format_phone_number(conv['phone'])
+            conv['originalName'] = extract_name_from_phone(conv['phone'])
+            
+            # Garantir que os campos de transferência sempre existam
+            if 'transferido_humano' not in conv:
+                conv['transferido_humano'] = False
+            if 'atribuido_para' not in conv:
+                conv['atribuido_para'] = None
+            if 'dados_transferencia' not in conv:
+                conv['dados_transferencia'] = None
         
         # Ordenar as mensagens de cada conversa do mais antigo para o mais novo
         for conv in conversations.values():
@@ -349,3 +399,254 @@ def test_bot():
         return jsonify({'erro': 'Número e mensagem são obrigatórios.'}), 400
     resposta = handle_message(numero, mensagem)
     return jsonify({'resposta': resposta})
+
+@api_bp.route('/global-queue', methods=['GET'])
+@cross_origin()
+def get_global_queue():
+    """Get conversations transferred by bot (not yet assigned to human)"""
+    try:
+        # Get all messages from database
+        all_messages = db.get_messages(limit=1000)
+        
+        # Group messages by phone number
+        conversations = {}
+        for msg in all_messages:
+            phone = msg['phone_number']
+            if phone not in conversations:
+                conversations[phone] = {
+                    'id': phone,
+                    'phone': phone,
+                    'messages': [],
+                    'last_message': '',
+                    'last_timestamp': None,
+                    'transferido_humano': False,
+                    'atribuido_para': None,
+                    'dados_transferencia': None
+                }
+            
+            # Add message to conversation
+            conversations[phone]['messages'].append({
+                'id': msg['id'],
+                'from': msg['from'],
+                'text': msg['message_text'],
+                'timestamp': msg['timestamp'],
+                'direction': msg['direction']
+            })
+            
+            # Update last message info
+            if not conversations[phone]['last_timestamp'] or msg['timestamp'] > conversations[phone]['last_timestamp']:
+                conversations[phone]['last_message'] = msg['message_text']
+                conversations[phone]['last_timestamp'] = msg['timestamp']
+        
+        # Check for transfer data in session store
+        global_queue = []
+        for phone in conversations:
+            session_data = get_session(phone)
+            if session_data and session_data.get('dados', {}).get('transferido_humano'):
+                conversations[phone]['transferido_humano'] = True
+                conversations[phone]['dados_transferencia'] = session_data.get('dados', {}).get('dados_transferencia')
+                
+                # Only add to global queue if not assigned to any user
+                if not conversations[phone].get('atribuido_para'):
+                    global_queue.append(conversations[phone])
+        
+        # Sort by timestamp (oldest first for queue)
+        global_queue.sort(key=lambda x: x['last_timestamp'] or '', reverse=False)
+        
+        logger.info(f"🌍 Global queue: {len(global_queue)} conversations")
+        return jsonify(global_queue)
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting global queue: {e}")
+        return jsonify([]), 500
+
+@api_bp.route('/assign-conversation', methods=['POST'])
+@cross_origin()
+def assign_conversation():
+    """Assign a conversation to a specific user"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId')
+        user_id = data.get('userId')
+        
+        if not conversation_id or not user_id:
+            return jsonify({'error': 'conversationId and userId are required'}), 400
+        
+        logger.info(f"📋 Assigning conversation {conversation_id} to user {user_id}")
+        
+        # Get session data for this conversation
+        session_data = get_session(conversation_id)
+        
+        if session_data:
+            # Update session to assign the conversation to the user
+            if 'dados' not in session_data:
+                session_data['dados'] = {}
+            
+            session_data['dados']['transferido_humano'] = True
+            session_data['dados']['atribuido_para'] = user_id
+            
+            # Save updated session
+            set_session(conversation_id, session_data)
+            
+            logger.info(f"✅ Conversation {conversation_id} assigned to user {user_id}")
+            return jsonify({'success': True, 'message': 'Conversation assigned successfully'})
+        else:
+            logger.warning(f"⚠️ No session found for conversation {conversation_id}")
+            return jsonify({'error': 'No session found for this conversation'}), 404
+        
+    except Exception as e:
+        logger.error(f"❌ Error assigning conversation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/transfer-conversation', methods=['POST'])
+@cross_origin()
+def transfer_conversation():
+    """Transfer a conversation from bot to human queue"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId')
+        user_id = data.get('userId')
+        
+        if not conversation_id:
+            return jsonify({'error': 'conversationId is required'}), 400
+        
+        logger.info(f"🔄 Transferring conversation {conversation_id} to human queue")
+        
+        # Get the phone number from the conversation ID (assuming it's the phone)
+        phone = conversation_id
+        
+        # Get session data for this conversation
+        session_data = get_session(phone)
+        
+        if session_data:
+            # Update session to mark as transferred to human and assigned to user
+            if 'dados' not in session_data:
+                session_data['dados'] = {}
+            
+            session_data['dados']['transferido_humano'] = True
+            session_data['dados']['atribuido_para'] = user_id  # Assign to current user
+            
+            # Save updated session
+            set_session(phone, session_data)
+            
+            logger.info(f"✅ Conversation {conversation_id} transferred to human queue and assigned to user {user_id}")
+            return jsonify({'success': True, 'message': 'Conversation transferred successfully'})
+        else:
+            logger.warning(f"⚠️ No session found for conversation {conversation_id}")
+            return jsonify({'error': 'No session found for this conversation'}), 404
+        
+    except Exception as e:
+        logger.error(f"❌ Error transferring conversation: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/return-to-global-queue', methods=['POST'])
+@cross_origin()
+def return_to_global_queue():
+    """Return a conversation to the global queue"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId')
+        phone = data.get('phone')
+        
+        if not conversation_id or not phone:
+            return jsonify({'error': 'conversationId and phone are required'}), 400
+        
+        logger.info(f"🔄 Returning conversation {conversation_id} to global queue")
+        
+        # Get session data for this conversation
+        session_data = get_session(phone)
+        
+        if session_data:
+            # Update session to mark as transferred to human but not assigned
+            if 'dados' not in session_data:
+                session_data['dados'] = {}
+            
+            session_data['dados']['transferido_humano'] = True
+            session_data['dados']['atribuido_para'] = None  # Remove assignment
+            
+            # Save updated session
+            set_session(phone, session_data)
+            
+            logger.info(f"✅ Conversation {conversation_id} returned to global queue")
+            return jsonify({'success': True, 'message': 'Conversation returned to global queue successfully'})
+        else:
+            logger.warning(f"⚠️ No session found for conversation {conversation_id}")
+            return jsonify({'error': 'No session found for this conversation'}), 404
+        
+    except Exception as e:
+        logger.error(f"❌ Error returning conversation to global queue: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/add-to-global-queue', methods=['POST'])
+@cross_origin()
+def add_to_global_queue():
+    """Add a conversation to the global queue"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId')
+        phone = data.get('phone')
+        
+        if not conversation_id or not phone:
+            return jsonify({'error': 'conversationId and phone are required'}), 400
+        
+        logger.info(f"🔄 Adding conversation {conversation_id} to global queue")
+        
+        # Get session data for this conversation
+        session_data = get_session(phone)
+        
+        if session_data:
+            # Update session to mark as transferred to human but not assigned
+            if 'dados' not in session_data:
+                session_data['dados'] = {}
+            
+            session_data['dados']['transferido_humano'] = True
+            session_data['dados']['atribuido_para'] = None  # Not assigned to anyone
+            
+            # Save updated session
+            set_session(phone, session_data)
+            
+            logger.info(f"✅ Conversation {conversation_id} added to global queue")
+            return jsonify({'success': True, 'message': 'Conversation added to global queue successfully'})
+        else:
+            logger.warning(f"⚠️ No session found for conversation {conversation_id}")
+            return jsonify({'error': 'No session found for this conversation'}), 404
+        
+    except Exception as e:
+        logger.error(f"❌ Error adding conversation to global queue: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/conversation-actions', methods=['POST'])
+@cross_origin()
+def conversation_actions():
+    """Handle conversation actions: transfer, close, return to queue"""
+    try:
+        data = request.get_json()
+        conversation_id = data.get('conversationId')
+        action = data.get('action')  # 'transfer', 'close', 'return'
+        target_user_id = data.get('targetUserId')  # for transfer action
+        
+        if not conversation_id or not action:
+            return jsonify({'error': 'conversationId and action are required'}), 400
+        
+        logger.info(f"🔄 Action {action} on conversation {conversation_id}")
+        
+        # Here you would implement the logic for each action
+        if action == 'transfer':
+            if not target_user_id:
+                return jsonify({'error': 'targetUserId required for transfer'}), 400
+            # Transfer logic
+            logger.info(f"Transferring conversation {conversation_id} to user {target_user_id}")
+            
+        elif action == 'close':
+            # Close conversation logic
+            logger.info(f"Closing conversation {conversation_id}")
+            
+        elif action == 'return':
+            # Return to queue logic
+            logger.info(f"Returning conversation {conversation_id} to queue")
+        
+        return jsonify({'success': True, 'message': f'Action {action} completed successfully'})
+        
+    except Exception as e:
+        logger.error(f"❌ Error in conversation action: {e}")
+        return jsonify({'error': str(e)}), 500

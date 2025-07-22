@@ -4,6 +4,7 @@
   width: 100vw;
   background-color: #f0f2f5;
   overflow: hidden;
+  position: relative;
 }
 
 .main-content {
@@ -13,17 +14,21 @@
   background-color: #ffffff;
   border-left: 1px solid #e9edef;
   min-width: 0;
+  overflow: hidden;
 }
 
 .main-content.full-width {
   border-left: none;
   margin-left: 0;
+  width: 100%;
 }
 
 .page-content {
   flex: 1;
   overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Responsive design */

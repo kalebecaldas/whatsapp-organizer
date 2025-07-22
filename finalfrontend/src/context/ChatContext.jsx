@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
 import { whatsappAPI } from '../utils/api';
 
@@ -156,13 +156,18 @@ export const ChatProvider = ({ children }) => {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const pollingIntervalRef = useRef(null);
   const socketRef = useRef(null);
+  const lastUpdateRef = useRef(0);
 
   // Inicializar WebSocket
   const initializeSocket = () => {
     try {
       socketRef.current = io('http://localhost:5001', {
-        transports: ['websocket', 'polling'],
+        transports: ['polling', 'websocket'], // Polling primeiro para compatibilidade
         timeout: 20000,
+        forceNew: true,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
       });
 
       socketRef.current.on('connect', () => {
@@ -180,6 +185,15 @@ export const ChatProvider = ({ children }) => {
         
         // Extrair conversas do objeto correto que vem do backend
         const conversations = data.conversations || data;
+        
+        // Verificar se as conversas realmente mudaram antes de atualizar
+        const currentConversations = state.conversations;
+        const hasChanges = !areConversationsEqual(currentConversations, conversations);
+        
+        if (!hasChanges) {
+          console.log('⏸️ Nenhuma mudança detectada, ignorando atualização WebSocket');
+          return;
+        }
         
         // Processar conversas imediatamente sem delays
         const formattedConversations = conversations.map(conv => {
@@ -210,6 +224,10 @@ export const ChatProvider = ({ children }) => {
             unread: 0,
             avatar: avatar,
             messages: formattedMessages,
+            // Adicionar campos de transferência
+            transferido_humano: conv.transferido_humano || false,
+            atribuido_para: conv.atribuido_para || null,
+            dados_transferencia: conv.dados_transferencia || null,
           };
         });
 
@@ -243,14 +261,16 @@ export const ChatProvider = ({ children }) => {
   };
 
   // Load conversations from backend
-  const loadConversations = async () => {
+  const loadConversations = useCallback(async () => {
+    // Debounce para evitar múltiplas chamadas em sequência
+    const now = Date.now();
+    if (now - lastUpdateRef.current < 2000) { // 2 segundos de debounce
+      console.log('⏸️ Debounce: ignorando chamada muito rápida');
+      return;
+    }
+    lastUpdateRef.current = now;
+    
     try {
-      // Se WebSocket está conectado, não fazer polling para evitar conflitos
-      if (state.socketConnected) {
-        console.log('⏸️ loadConversations pausado - WebSocket conectado');
-        return;
-      }
-
       console.log('🔄 Iniciando carregamento de conversas...');
       dispatch({ type: 'SET_LOADING', payload: true });
       
@@ -272,6 +292,11 @@ export const ChatProvider = ({ children }) => {
         const formattedMessages = mapMessages(conv.messages, conv.phone);
         
         console.log(`📱 loadConversations - Conversa ${conv.phone}: ${formattedMessages.length} mensagens formatadas`);
+        console.log(`📋 Campos de transferência para ${conv.phone}:`, {
+          transferido_humano: conv.transferido_humano,
+          atribuido_para: conv.atribuido_para,
+          dados_transferencia: conv.dados_transferencia
+        });
         formattedMessages.forEach((msg, i) => {
           console.log(`  ${i}: sender="${msg.sender}" | "${msg.text}"`);
         });
@@ -287,23 +312,24 @@ export const ChatProvider = ({ children }) => {
           unread: 0, // Backend doesn't provide unread count yet
           avatar: avatar,
           messages: formattedMessages,
+          // Adicionar campos de transferência
+          transferido_humano: conv.transferido_humano || false,
+          atribuido_para: conv.atribuido_para || null,
+          dados_transferencia: conv.dados_transferencia || null,
         };
       });
 
-      // Só atualiza se mudou
-      if (!areConversationsEqual(state.conversations, conversations)) {
-        dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
-        // Set unread counts (for now, all 0)
-        conversations.forEach(conv => {
-          dispatch({
-            type: 'UPDATE_UNREAD_COUNT',
-            payload: { conversationId: conv.id, count: conv.unread },
-          });
+      // Sempre atualizar as conversas quando chamado explicitamente
+      dispatch({ type: 'SET_CONVERSATIONS', payload: conversations });
+      // Set unread counts (for now, all 0)
+      conversations.forEach(conv => {
+        dispatch({
+          type: 'UPDATE_UNREAD_COUNT',
+          payload: { conversationId: conv.id, count: conv.unread },
         });
-        console.log('✅ Conversas atualizadas');
-      } else {
-        console.log('⏸️ Conversas não mudaram, não atualiza');
-      }
+      });
+      console.log('✅ Conversas atualizadas');
+      
     } catch (error) {
       console.error('❌ Erro ao carregar conversas:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Erro ao carregar conversas' });
@@ -338,17 +364,17 @@ export const ChatProvider = ({ children }) => {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  };
+  }, []);
 
   // Load statistics
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const response = await whatsappAPI.getStats();
       dispatch({ type: 'SET_STATS', payload: response.data });
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, []);
 
   // Start polling for real-time updates with shorter interval (fallback)
   const startPolling = () => {
@@ -356,7 +382,7 @@ export const ChatProvider = ({ children }) => {
       clearInterval(pollingIntervalRef.current);
     }
     
-    // Poll every 30 seconds as fallback (reduced frequency since we have WebSocket)
+    // Poll every 60 seconds as fallback (reduced frequency since we have WebSocket)
     pollingIntervalRef.current = setInterval(() => {
       // Only poll if WebSocket is not connected
       if (!state.socketConnected) {
@@ -366,7 +392,7 @@ export const ChatProvider = ({ children }) => {
       } else {
         console.log('⏸️ Polling pausado - WebSocket conectado');
       }
-    }, 30000); // 30 segundos para reduzir conflitos
+    }, 60000); // 60 segundos para reduzir conflitos
   };
 
   // Stop polling
@@ -388,8 +414,14 @@ export const ChatProvider = ({ children }) => {
   // Initial load and start services
   useEffect(() => {
     console.log('🚀 ChatContext useEffect executado - iniciando serviços...');
-    loadConversations();
-    loadStats();
+    
+    // Carregar dados iniciais apenas uma vez
+    const initializeData = async () => {
+      await loadConversations();
+      await loadStats();
+    };
+    
+    initializeData();
     initializeSocket();
     startPolling();
 
@@ -410,7 +442,7 @@ export const ChatProvider = ({ children }) => {
         dispatch({ type: 'SET_MESSAGES', payload: mapMessages(selectedConv.messages, selectedConv.phone) });
       }
     }
-  }, [state.selectedConversation, state.conversations]);
+  }, [state.selectedConversation?.id]); // Apenas quando o ID da conversa selecionada mudar
 
   // Atualizar conversas apenas se mudarem (WebSocket) - Otimizado
   const handleConversationsUpdate = (conversations) => {
@@ -456,10 +488,25 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
-  const refreshConversations = async () => {
-    await loadConversations();
-    await loadStats();
-  };
+  const refreshConversations = useCallback(async () => {
+    console.log('🔄 refreshConversations iniciado...');
+    try {
+      // Forçar recarregamento das conversas
+      await loadConversations();
+      await loadStats();
+      
+      // Aguardar um pouco para garantir que os dados foram processados
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      console.log('✅ refreshConversations concluído');
+      
+      // Forçar uma nova renderização
+      console.log('🔄 Forçando atualização da interface...');
+      
+    } catch (error) {
+      console.error('❌ Erro no refreshConversations:', error);
+    }
+  }, []);
 
   // Atualizar mensagens apenas se mudarem
   const selectConversation = (conversation) => {

@@ -8,8 +8,8 @@ import './Layout.css';
 const Layout = ({ children }) => {
   const location = useLocation();
   
-  // Pages that should show the sidebar (conversations list)
-  const pagesWithSidebar = ['/', '/dashboard', '/messages'];
+  // Sidebar só nas páginas que precisam (não na página Messages)
+  const pagesWithSidebar = []; // Removido '/messages' pois ela terá sua própria sidebar
   const shouldShowSidebar = pagesWithSidebar.includes(location.pathname);
 
   return (

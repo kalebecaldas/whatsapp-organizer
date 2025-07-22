@@ -20,8 +20,8 @@ const config = {
   // NÚMEROS DE TELEFONE PERMITIDOS PARA TESTES
   // Deixe como array vazio ([]) para permitir mensagens de TODOS os números.
   allowedTestNumbers: [
-    '559285026981@c.us',
-    '559293596706@c.us'
+    '559285026981@c.us'
+    //'559293596706@c.us'
   ], // Altere para os seus números de teste
 };
 
