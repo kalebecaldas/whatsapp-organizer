@@ -1,0 +1,64 @@
+:root {
+  /* Cores principais */
+  --primary-color: #25d366;
+  --primary-dark: #128c7e;
+  --secondary-color: #8b5cf6;
+  --accent-color: #f59e0b;
+  
+  /* Cores de fundo */
+  --background-color: #f0f2f5;
+  --background-light: #ffffff;
+  --background-dark: #111b21;
+  
+  /* Cores de texto */
+  --text-primary: #111b21;
+  --text-secondary: #667781;
+  --text-light: #ffffff;
+  
+  /* Cores de status */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --info-color: #3b82f6;
+  
+  /* Bordas e sombras */
+  --border-radius: 8px;
+  --border-radius-small: 4px;
+  --border-radius-large: 12px;
+  --border-color: #e9edef;
+  --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-medium: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-heavy: 0 4px 12px rgba(0, 0, 0, 0.3);
+  
+  /* Espaçamentos */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  
+  /* Tamanhos de fonte */
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-xxl: 24px;
+  
+  /* Pesos de fonte */
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  
+  /* Transições */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  
+  /* Z-index */
+  --z-dropdown: 1000;
+  --z-modal: 2000;
+  --z-tooltip: 3000;
+  --z-notification: 4000;
+} 

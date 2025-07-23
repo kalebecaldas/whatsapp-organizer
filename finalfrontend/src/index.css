@@ -54,6 +54,36 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+/* Garantir que elementos circulares sejam sempre circulares */
+[style*="border-radius: 50%"],
+.border-radius-50,
+[class*="border-radius-50"] {
+  border-radius: 50% !important;
+  aspect-ratio: 1;
+}
+
+/* Remover contornos estranhos de botões de fechar */
+.close-user-info,
+.close-user-info:focus,
+.close-user-info:focus-visible,
+.close-user-info:active,
+.close-btn,
+.close-btn:focus,
+.close-btn:focus-visible,
+.close-btn:active,
+.login-button,
+.login-button:focus,
+.login-button:focus-visible,
+.login-button:active,
+.password-toggle,
+.password-toggle:focus,
+.password-toggle:focus-visible,
+.password-toggle:active {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
 @media (prefers-color-scheme: light) {
   :root {
     color: #213547;

@@ -1,0 +1,24 @@
+.layout {
+  display: flex;
+  height: 100vh;
+  background: #f8fafc;
+}
+
+.main-content {
+  flex: 1;
+  margin-left: 280px; /* Largura do menu */
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    margin-top: 60px; /* Altura do menu mobile */
+  }
+} 

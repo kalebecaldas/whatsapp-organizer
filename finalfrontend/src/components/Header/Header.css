@@ -1,0 +1,136 @@
+.header {
+  background-color: #f0f2f5;
+  border-bottom: 1px solid #e9edef;
+  padding: clamp(8px, 1vh, 12px) clamp(12px, 1.5vw, 16px);
+  min-height: clamp(50px, 6vh, 60px);
+  display: flex;
+  align-items: center;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  gap: clamp(12px, 1.5vw, 16px);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contact-info {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 12px);
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-avatar img {
+  width: clamp(32px, 3vw, 40px);
+  height: clamp(32px, 3vw, 40px);
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.contact-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.contact-name {
+  font-size: clamp(14px, 1.5vw, 16px);
+  font-weight: 600;
+  color: #111b21;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.contact-status {
+  font-size: clamp(11px, 1.2vw, 13px);
+  color: #667781;
+}
+
+.page-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.page-title h2 {
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 600;
+  color: #111b21;
+  margin: 0;
+}
+
+
+
+.logout-button {
+  background: none;
+  border: none;
+  color: #54656f;
+  padding: clamp(3px, 0.5vh, 5px);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.logout-button:hover {
+  background: #e9edef;
+  color: #d32f2f;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .header-actions {
+    gap: 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 8px 12px;
+  }
+  
+  .contact-name {
+    font-size: 14px;
+  }
+  
+  .contact-status {
+    font-size: 12px;
+  }
+  
+
+  
+  .page-title h2 {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    padding: 6px 8px;
+  }
+  
+  .contact-avatar img {
+    width: 28px;
+    height: 28px;
+  }
+  
+
+  
+  .page-title h2 {
+    font-size: 18px;
+  }
+} 
