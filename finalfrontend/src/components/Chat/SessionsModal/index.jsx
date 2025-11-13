@@ -14,6 +14,7 @@ const SessionsModal = ({ isVisible, onClose, phone }) => {
     if (isVisible && phone) {
       loadSessions();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible, phone]);
 
   const loadSessions = async () => {
