@@ -10,6 +10,8 @@ from datetime import datetime
 import json
 import logging
 import requests
+import os
+from werkzeug.utils import secure_filename
 from session_store import get_session, set_session
 
 logger = logging.getLogger(__name__)
@@ -649,4 +651,333 @@ def conversation_actions():
         
     except Exception as e:
         logger.error(f"❌ Error in conversation action: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/conversations/<phone>/sessions', methods=['GET'])
+@cross_origin()
+def get_conversation_sessions(phone):
+    """Get all sessions for a specific phone number"""
+    try:
+        # Get all messages for this phone number
+        all_messages = db.get_messages_by_phone(phone, limit=1000)
+        
+        if not all_messages:
+            return jsonify({'sessions': []})
+        
+        # Group messages into sessions based on time gaps (30 minutes = new session)
+        SESSION_GAP_MINUTES = 30
+        sessions = []
+        current_session = {
+            'id': None,
+            'start_time': None,
+            'end_time': None,
+            'message_count': 0,
+            'last_message': None,
+            'status': 'active',
+            'messages': []
+        }
+        
+        for i, msg in enumerate(all_messages):
+            msg_timestamp = datetime.fromisoformat(msg['timestamp'].replace('Z', '+00:00'))
+            
+            if i == 0:
+                # First message starts a session
+                current_session['id'] = f"{phone}_{i}"
+                current_session['start_time'] = msg['timestamp']
+                current_session['end_time'] = msg['timestamp']
+                current_session['last_message'] = msg['message_text']
+                current_session['messages'].append({
+                    'id': msg['id'],
+                    'text': msg['message_text'],
+                    'direction': msg['direction'],
+                    'from': msg['from'],
+                    'timestamp': msg['timestamp']
+                })
+                current_session['message_count'] = 1
+            else:
+                # Check time gap from previous message
+                prev_timestamp = datetime.fromisoformat(all_messages[i-1]['timestamp'].replace('Z', '+00:00'))
+                time_diff = (msg_timestamp - prev_timestamp).total_seconds() / 60  # minutes
+                
+                if time_diff > SESSION_GAP_MINUTES:
+                    # Save current session and start new one
+                    current_session['status'] = 'finished'
+                    sessions.append(current_session)
+                    
+                    current_session = {
+                        'id': f"{phone}_{i}",
+                        'start_time': msg['timestamp'],
+                        'end_time': msg['timestamp'],
+                        'message_count': 1,
+                        'last_message': msg['message_text'],
+                        'status': 'active',
+                        'messages': [{
+                            'id': msg['id'],
+                            'text': msg['message_text'],
+                            'direction': msg['direction'],
+                            'from': msg['from'],
+                            'timestamp': msg['timestamp']
+                        }]
+                    }
+                else:
+                    # Continue current session
+                    current_session['end_time'] = msg['timestamp']
+                    current_session['last_message'] = msg['message_text']
+                    current_session['message_count'] += 1
+                    current_session['messages'].append({
+                        'id': msg['id'],
+                        'text': msg['message_text'],
+                        'direction': msg['direction'],
+                        'from': msg['from'],
+                        'timestamp': msg['timestamp']
+                    })
+        
+        # Add last session
+        if current_session['message_count'] > 0:
+            # Check if last session is still active (within last 30 minutes)
+            last_msg_time = datetime.fromisoformat(current_session['end_time'].replace('Z', '+00:00'))
+            now = datetime.now(last_msg_time.tzinfo)
+            time_since_last = (now - last_msg_time).total_seconds() / 60
+            
+            if time_since_last > SESSION_GAP_MINUTES:
+                current_session['status'] = 'finished'
+            
+            sessions.append(current_session)
+        
+        # Reverse to show most recent first
+        sessions.reverse()
+        
+        # Format response
+        formatted_sessions = []
+        for session in sessions:
+            formatted_sessions.append({
+                'id': session['id'],
+                'start_time': session['start_time'],
+                'end_time': session['end_time'],
+                'message_count': session['message_count'],
+                'last_message': session['last_message'],
+                'status': session['status'],
+                'preview': session['last_message'][:100] if session['last_message'] else ''
+            })
+        
+        return jsonify({
+            'phone': phone,
+            'total_sessions': len(formatted_sessions),
+            'sessions': formatted_sessions
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting sessions for {phone}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/conversations/<phone>/sessions/<session_id>/messages', methods=['GET'])
+@cross_origin()
+def get_session_messages(phone, session_id):
+    """Get all messages for a specific session"""
+    try:
+        # Get all messages for this phone number
+        all_messages = db.get_messages_by_phone(phone, limit=1000)
+        
+        if not all_messages:
+            return jsonify({'messages': []})
+        
+        # Find the session by extracting index from session_id
+        # session_id format: {phone}_{index}
+        try:
+            session_index = int(session_id.split('_')[-1])
+        except:
+            return jsonify({'error': 'Invalid session ID'}), 400
+        
+        # Group messages into sessions (same logic as above)
+        SESSION_GAP_MINUTES = 30
+        sessions = []
+        current_session = {
+            'id': None,
+            'messages': []
+        }
+        
+        for i, msg in enumerate(all_messages):
+            msg_timestamp = datetime.fromisoformat(msg['timestamp'].replace('Z', '+00:00'))
+            
+            if i == 0:
+                current_session['id'] = f"{phone}_{i}"
+                current_session['messages'].append({
+                    'id': msg['id'],
+                    'text': msg['message_text'],
+                    'direction': msg['direction'],
+                    'from': msg['from'],
+                    'timestamp': msg['timestamp']
+                })
+            else:
+                prev_timestamp = datetime.fromisoformat(all_messages[i-1]['timestamp'].replace('Z', '+00:00'))
+                time_diff = (msg_timestamp - prev_timestamp).total_seconds() / 60
+                
+                if time_diff > SESSION_GAP_MINUTES:
+                    sessions.append(current_session)
+                    current_session = {
+                        'id': f"{phone}_{i}",
+                        'messages': [{
+                            'id': msg['id'],
+                            'text': msg['message_text'],
+                            'direction': msg['direction'],
+                            'from': msg['from'],
+                            'timestamp': msg['timestamp']
+                        }]
+                    }
+                else:
+                    current_session['messages'].append({
+                        'id': msg['id'],
+                        'text': msg['message_text'],
+                        'direction': msg['direction'],
+                        'from': msg['from'],
+                        'timestamp': msg['timestamp']
+                    })
+        
+        sessions.append(current_session)
+        sessions.reverse()  # Most recent first
+        
+        # Find the requested session
+        target_session = None
+        for session in sessions:
+            if session['id'] == session_id:
+                target_session = session
+                break
+        
+        if not target_session:
+            return jsonify({'error': 'Session not found'}), 404
+        
+        return jsonify({
+            'session_id': session_id,
+            'phone': phone,
+            'message_count': len(target_session['messages']),
+            'messages': target_session['messages']
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting session messages: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/upload-media', methods=['POST'])
+@cross_origin()
+def upload_media():
+    """Upload media file and send via WhatsApp"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        phone = request.form.get('phone')
+        media_type = request.form.get('type', 'image')
+        
+        if not phone:
+            return jsonify({'error': 'Phone number is required'}), 400
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Validate file size
+        MAX_FILE_SIZES = {
+            'image': 10 * 1024 * 1024,  # 10MB
+            'document': 50 * 1024 * 1024,  # 50MB
+            'audio': 20 * 1024 * 1024,  # 20MB
+            'video': 50 * 1024 * 1024  # 50MB
+        }
+        
+        max_size = MAX_FILE_SIZES.get(media_type, 10 * 1024 * 1024)
+        if file.content_length and file.content_length > max_size:
+            return jsonify({
+                'error': f'File too large. Maximum size: {max_size / (1024 * 1024)}MB'
+            }), 400
+        
+        # Read file content
+        file_content = file.read()
+        file.seek(0)  # Reset file pointer
+        
+        # Generate secure filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_path = f"{phone}/{timestamp}_{filename}"
+        
+        # Upload to Supabase Storage (if configured)
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_KEY", "")
+        supabase_bucket = os.getenv("SUPABASE_BUCKET", "media")
+        
+        media_url = None
+        if supabase_url and supabase_key:
+            try:
+                # Upload to Supabase using REST API
+                upload_url = f"{supabase_url}/storage/v1/object/{supabase_bucket}/{file_path}"
+                headers = {
+                    'apikey': supabase_key,
+                    'Authorization': f'Bearer {supabase_key}',
+                    'Content-Type': file.content_type or 'application/octet-stream'
+                }
+                
+                upload_response = requests.put(
+                    upload_url,
+                    data=file_content,
+                    headers=headers,
+                    timeout=30
+                )
+                
+                if upload_response.status_code in [200, 201]:
+                    # Get public URL
+                    public_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/{file_path}"
+                    media_url = public_url
+                    logger.info(f"✅ Arquivo enviado para Supabase: {file_path}")
+                else:
+                    logger.error(f"❌ Erro ao enviar para Supabase: {upload_response.status_code}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao fazer upload para Supabase: {e}")
+        
+        # Send via WhatsApp API (Meta/Venom Bot)
+        try:
+            # Try Venom Bot first
+            venom_response = requests.post(
+                'http://localhost:3000/send-media',
+                json={
+                    'phone': phone,
+                    'file': file_path,
+                    'type': media_type,
+                    'url': media_url,
+                    'filename': filename
+                },
+                files={'file': (filename, file_content, file.content_type)},
+                timeout=60
+            )
+            
+            if venom_response.status_code == 200:
+                logger.info(f"📤 Mídia enviada via Venom Bot para {phone}")
+            else:
+                logger.warning(f"⚠️ Venom Bot não respondeu: {venom_response.status_code}")
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"⚠️ Venom Bot não disponível: {e}")
+        
+        # Save message metadata to database
+        message_text = f"📎 {filename}"
+        if media_url:
+            message_text += f" ({media_url})"
+        
+        timestamp = datetime.now().isoformat()
+        db.save_message(
+            phone_number=phone,
+            message_text=message_text,
+            direction='sent',
+            from_field='agent',
+            timestamp=timestamp
+        )
+        
+        # Emit WebSocket update
+        emit_message_update()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Media uploaded and sent successfully',
+            'url': media_url,
+            'file_path': file_path
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error uploading media: {e}")
         return jsonify({'error': str(e)}), 500

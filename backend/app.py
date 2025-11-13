@@ -10,6 +10,9 @@ import time
 
 from api.routes import api_bp, init_socketio
 from api.stats_routes import stats_bp
+from api.media_routes import media_bp
+from api.meta_routes import meta_bp
+from api.internal_conversations_routes import internal_bp, init_internal_socketio
 from session_store import redis_client
 from message_store import messages_store
 from database import db
@@ -57,9 +60,15 @@ socketio = SocketIO(
     engineio_logger=True
 )
 
+# Initialize socketio for internal conversations
+init_internal_socketio(socketio)
+
 # Blueprints
 app.register_blueprint(api_bp, url_prefix="/api")
 app.register_blueprint(stats_bp, url_prefix="/api")
+app.register_blueprint(media_bp, url_prefix="/api")
+app.register_blueprint(meta_bp, url_prefix="/api/meta")
+app.register_blueprint(internal_bp, url_prefix="/api")
 
 # Health check endpoint
 @app.route("/health", methods=["GET"])

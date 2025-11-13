@@ -8,7 +8,8 @@ import {
   Settings, 
   LogOut,
   User,
-  ChevronDown
+  ChevronDown,
+  MessageCircle
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import './Menu.css';
@@ -32,6 +33,13 @@ const Menu = () => {
       label: 'Mensagens',
       icon: MessageSquare,
       path: '/messages',
+      permission: 'messages'
+    },
+    {
+      id: 'internal-chat',
+      label: 'Conversas Internas',
+      icon: MessageCircle,
+      path: '/internal-chat',
       permission: 'messages'
     },
     {
