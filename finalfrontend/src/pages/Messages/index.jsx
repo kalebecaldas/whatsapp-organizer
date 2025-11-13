@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import ChatWindow from '../../components/Chat/ChatWindow';
 import MessageInput from '../../components/Chat/MessageInput';
 import GlobalQueue from '../../components/Chat/BotQueue';
+import SessionsModal from '../../components/Chat/SessionsModal';
 import { useChat } from '../../context/ChatContext';
-import { Search, Filter, Users, MessageSquare, X, Menu } from 'lucide-react';
+import { Search, Filter, Users, MessageSquare, X, Menu, Clock } from 'lucide-react';
 import './Messages.css';
 
 const Messages = () => {
@@ -12,6 +13,8 @@ const Messages = () => {
   const [filterType, setFilterType] = useState('human');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showGlobalQueue, setShowGlobalQueue] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
+  const [selectedPhoneForSessions, setSelectedPhoneForSessions] = useState(null);
 
   // Recarregar conversas quando a página for acessada
   useEffect(() => {
@@ -217,6 +220,19 @@ const Messages = () => {
                       {assigningId === conversation.id ? 'Pegando...' : (<><MessageSquare size={16} /> Pegar</>)}
                     </button>
                   )}
+                  {/* Botão Ver Sessões */}
+                  <button
+                    className="view-sessions-button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      setSelectedPhoneForSessions(conversation.phone);
+                      setShowSessionsModal(true);
+                    }}
+                    title="Ver sessões de conversa"
+                  >
+                    <Clock size={14} />
+                    Sessões
+                  </button>
                 </div>
               </div>
             ))
@@ -261,6 +277,16 @@ const Messages = () => {
           setShowGlobalQueue(false);
           refreshConversations();
         }}
+      />
+
+      {/* Modal de Sessões */}
+      <SessionsModal
+        isVisible={showSessionsModal}
+        onClose={() => {
+          setShowSessionsModal(false);
+          setSelectedPhoneForSessions(null);
+        }}
+        phone={selectedPhoneForSessions}
       />
     </div>
   );

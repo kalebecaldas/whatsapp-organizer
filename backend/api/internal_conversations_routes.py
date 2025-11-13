@@ -456,13 +456,127 @@ def send_internal_message(conversation_id):
 def upload_internal_media(conversation_id):
     """Upload media for an internal conversation"""
     try:
-        # Similar to regular upload-media but for internal conversations
-        # This would integrate with the same Supabase storage
-        # For now, return a placeholder
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        sender_id = request.form.get('sender_id', 'current-user')  # TODO: Get from auth
+        message_type = request.form.get('type', 'image')
+        
+        if file.filename == '':
+            return jsonify({'error': 'No file selected'}), 400
+        
+        # Validate file size
+        MAX_FILE_SIZES = {
+            'image': 10 * 1024 * 1024,  # 10MB
+            'document': 50 * 1024 * 1024,  # 50MB
+            'audio': 20 * 1024 * 1024,  # 20MB
+            'video': 50 * 1024 * 1024  # 50MB
+        }
+        
+        max_size = MAX_FILE_SIZES.get(message_type, 10 * 1024 * 1024)
+        if file.content_length and file.content_length > max_size:
+            return jsonify({
+                'error': f'File too large. Maximum size: {max_size / (1024 * 1024)}MB'
+            }), 400
+        
+        # Read file content
+        file_content = file.read()
+        file.seek(0)
+        
+        # Generate secure filename
+        from werkzeug.utils import secure_filename
+        filename = secure_filename(file.filename)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        file_path = f"internal/{conversation_id}/{timestamp}_{filename}"
+        
+        # Upload to Supabase Storage (if configured)
+        supabase_url = os.getenv("SUPABASE_URL", "")
+        supabase_key = os.getenv("SUPABASE_KEY", "")
+        supabase_bucket = os.getenv("SUPABASE_BUCKET", "media")
+        
+        media_url = None
+        if supabase_url and supabase_key:
+            try:
+                import requests
+                upload_url = f"{supabase_url}/storage/v1/object/{supabase_bucket}/{file_path}"
+                headers = {
+                    'apikey': supabase_key,
+                    'Authorization': f'Bearer {supabase_key}',
+                    'Content-Type': file.content_type or 'application/octet-stream'
+                }
+                
+                upload_response = requests.put(
+                    upload_url,
+                    data=file_content,
+                    headers=headers,
+                    timeout=30
+                )
+                
+                if upload_response.status_code in [200, 201]:
+                    public_url = f"{supabase_url}/storage/v1/object/public/{supabase_bucket}/{file_path}"
+                    media_url = public_url
+                    logger.info(f"✅ Arquivo enviado para Supabase: {file_path}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao fazer upload para Supabase: {e}")
+        
+        # Save message with media URL
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        content = f"📎 {filename}"
+        if media_url:
+            content += f" ({media_url})"
+        
+        metadata = {
+            'media_url': media_url,
+            'filename': filename,
+            'file_path': file_path,
+            'content_type': file.content_type
+        }
+        
+        metadata_json = json.dumps(metadata)
+        timestamp_iso = datetime.now().isoformat()
+        
+        cursor.execute('''
+            INSERT INTO internal_messages 
+            (conversation_id, sender_id, content, message_type, metadata, timestamp, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (conversation_id, sender_id, content, message_type, metadata_json, timestamp_iso, timestamp_iso, timestamp_iso))
+        
+        message_id = cursor.lastrowid
+        
+        # Update conversation updated_at
+        cursor.execute('''
+            UPDATE internal_conversations
+            SET updated_at = ?
+            WHERE id = ?
+        ''', (timestamp_iso, conversation_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # Emit WebSocket event
+        if socketio:
+            socketio.emit('internal_message_new', {
+                'conversation_id': conversation_id,
+                'message': {
+                    'id': message_id,
+                    'sender_id': sender_id,
+                    'content': content,
+                    'message_type': message_type,
+                    'metadata': metadata,
+                    'timestamp': timestamp_iso
+                }
+            })
+        
         return jsonify({
             'success': True,
-            'message': 'Media upload for internal conversations - to be implemented'
-        })
+            'message_id': message_id,
+            'url': media_url,
+            'file_path': file_path,
+            'message': 'Media uploaded successfully'
+        }), 201
         
     except Exception as e:
         logger.error(f"❌ Error uploading internal media: {e}")
