@@ -81,7 +81,7 @@ function App() {
             </Routes>
           </div>
         </Router>
-        </InternalChatProvider>
+      </InternalChatProvider>
       </ChatProvider>
     </AuthProvider>
   );
