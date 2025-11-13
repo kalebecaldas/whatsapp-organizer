@@ -144,6 +144,150 @@
   font-weight: 500;
 }
 
+/* File Preview Section */
+.file-preview-section {
+  padding: 8px 16px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e9edef;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  background-color: #f0f2f5;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.file-preview-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.file-preview-icon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e9edef;
+  border-radius: 6px;
+  color: #54656f;
+}
+
+.file-preview-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-preview-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111b21;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-preview-size {
+  font-size: 12px;
+  color: #667781;
+}
+
+.upload-progress {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background-color: #e9edef;
+  border-radius: 2px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.upload-progress-bar {
+  height: 100%;
+  background-color: #25d366;
+  transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+  font-size: 11px;
+  color: #667781;
+  margin-top: 2px;
+}
+
+.file-preview-remove {
+  background: none;
+  border: none;
+  padding: 4px;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #667781;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.file-preview-remove:hover {
+  background-color: #e9edef;
+}
+
+.file-preview-remove:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.send-files-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background-color: #25d366;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 8px;
+}
+
+.send-files-button:hover {
+  background-color: #22c55e;
+}
+
+/* Drag and drop styles */
+.message-input-container.dragging {
+  background-color: #e8f5e9;
+  border: 2px dashed #25d366;
+}
+
+.message-input-container.dragging::before {
+  content: 'Solte os arquivos aqui';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(37, 211, 102, 0.9);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  z-index: 100;
+  pointer-events: none;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .message-input-container {
@@ -156,5 +300,19 @@
   
   .message-textarea {
     font-size: 14px;
+  }
+
+  .file-preview-section {
+    padding: 6px 12px;
+  }
+
+  .file-preview-item {
+    padding: 6px;
+  }
+
+  .file-preview-image,
+  .file-preview-icon {
+    width: 50px;
+    height: 50px;
   }
 } 

@@ -598,4 +598,32 @@
 .messages-page .queue-button,
 .messages-page .open-sidebar-btn {
   position: relative !important;
+}
+
+/* Botão Ver Sessões */
+.view-sessions-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background-color: #f0f2f5;
+  border: 1px solid #e9edef;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #54656f;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+  align-self: flex-start;
+}
+
+.view-sessions-button:hover {
+  background-color: #e9edef;
+  border-color: #25d366;
+  color: #25d366;
+}
+
+.view-sessions-button:active {
+  transform: scale(0.95);
 } 

@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { whatsappAPI } from '../utils/api';
+import { whatsappAPI, sessionsAPI } from '../utils/api';
 
 const ChatContext = createContext();
 
@@ -521,6 +521,35 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  // Load messages for a specific session
+  const loadSessionMessages = useCallback(async (phone, sessionId) => {
+    try {
+      const response = await sessionsAPI.getSessionMessages(phone, sessionId);
+      const sessionMessages = response.data.messages || [];
+      
+      // Map session messages to the same format as regular messages
+      const formattedMessages = mapMessages(
+        sessionMessages.map(msg => ({
+          text: msg.text,
+          direction: msg.direction,
+          from: msg.from,
+          timestamp: msg.timestamp
+        })),
+        phone
+      );
+      
+      // Update messages for the selected conversation
+      if (state.selectedConversation && state.selectedConversation.phone === phone) {
+        dispatch({ type: 'SET_MESSAGES', payload: formattedMessages });
+      }
+      
+      return formattedMessages;
+    } catch (error) {
+      console.error('❌ Erro ao carregar mensagens da sessão:', error);
+      return [];
+    }
+  }, [state.selectedConversation]);
+
   const value = {
     ...state,
     selectConversation,
@@ -528,6 +557,7 @@ export const ChatProvider = ({ children }) => {
     refreshConversations,
     loadConversations,
     loadStats,
+    loadSessionMessages,
   };
 
   return (

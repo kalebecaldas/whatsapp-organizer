@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ChatProvider } from './context/ChatContext';
+import { InternalChatProvider } from './context/InternalChatContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -10,13 +11,15 @@ import Messages from './pages/Messages';
 import Reports from './pages/Reports';
 import Users from './pages/Users';
 import Settings from './pages/Settings';
+import InternalChat from './pages/InternalChat';
 import './App.css';
 
 function App() {
   return (
     <AuthProvider>
       <ChatProvider>
-        <Router>
+        <InternalChatProvider>
+          <Router>
           <div className="App">
             <Routes>
               {/* Rota pública */}
@@ -65,11 +68,20 @@ function App() {
                 </ProtectedRoute>
               } />
               
+              <Route path="/internal-chat" element={
+                <ProtectedRoute requiredPermission="messages">
+                  <Layout>
+                    <InternalChat />
+                  </Layout>
+                </ProtectedRoute>
+              } />
+              
               {/* Rota padrão - redirecionar para dashboard */}
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </div>
         </Router>
+      </InternalChatProvider>
       </ChatProvider>
     </AuthProvider>
   );

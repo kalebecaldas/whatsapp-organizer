@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useChat } from '../../../context/ChatContext';
-import { Users, X, RotateCcw, ArrowRight, Upload, Check } from 'lucide-react';
+import { Users, X, RotateCcw, ArrowRight, Upload, Check, Clock } from 'lucide-react';
 import TransferPopup from '../TransferPopup';
+import SessionsModal from '../SessionsModal';
 import './ChatWindow.css';
 
 const ChatWindow = () => {
@@ -14,6 +15,7 @@ const ChatWindow = () => {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [showTransferPopup, setShowTransferPopup] = useState(false);
+  const [showSessionsModal, setShowSessionsModal] = useState(false);
 
   // Função para recarregar conversas após ações
   const reloadConversations = async () => {
@@ -437,6 +439,16 @@ const ChatWindow = () => {
             atribuido_para: selectedConversation?.atribuido_para
           })}
           
+          {/* Ver Sessões Button - Available for all conversations */}
+          <button 
+            className="action-button sessions-btn"
+            onClick={() => setShowSessionsModal(true)}
+            aria-label="Ver sessões de conversa"
+            title="Ver sessões de conversa"
+          >
+            <Clock size={20} />
+          </button>
+          
           {/* BOT AREA - Botões específicos para conversas do bot */}
           {selectedConversation && !selectedConversation.transferido_humano && (
             <>
@@ -584,6 +596,13 @@ const ChatWindow = () => {
         onTransfer={handleTransferToUser}
         onTransferToGlobalQueue={handleTransferToGlobalQueue}
         conversation={selectedConversation}
+      />
+
+      {/* Modal de Sessões */}
+      <SessionsModal
+        isVisible={showSessionsModal}
+        onClose={() => setShowSessionsModal(false)}
+        phone={selectedConversation?.phone}
       />
     </div>
   );

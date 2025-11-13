@@ -73,6 +73,49 @@ class Database:
                     )
                 ''')
                 
+                # Create internal_conversations table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS internal_conversations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        type TEXT NOT NULL DEFAULT 'direct',
+                        description TEXT,
+                        avatar TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        metadata TEXT
+                    )
+                ''')
+                
+                # Create internal_conversation_members table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS internal_conversation_members (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id INTEGER NOT NULL,
+                        user_id TEXT NOT NULL,
+                        role TEXT DEFAULT 'member',
+                        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES internal_conversations (id) ON DELETE CASCADE,
+                        UNIQUE(conversation_id, user_id)
+                    )
+                ''')
+                
+                # Create internal_messages table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS internal_messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id INTEGER NOT NULL,
+                        sender_id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        message_type TEXT DEFAULT 'text',
+                        metadata TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (conversation_id) REFERENCES internal_conversations (id) ON DELETE CASCADE
+                    )
+                ''')
+                
                 # Create indexes for faster queries
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_phone_number ON messages(phone_number)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)')
@@ -80,9 +123,15 @@ class Database:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_conversation_phone ON conversations(phone_number)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_agent_status ON agents(status)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_metrics_date ON conversation_metrics(date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_conv_type ON internal_conversations(type)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_conv_updated ON internal_conversations(updated_at)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_member_conv ON internal_conversation_members(conversation_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_member_user ON internal_conversation_members(user_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_msg_conv ON internal_messages(conversation_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_internal_msg_timestamp ON internal_messages(timestamp)')
                 
                 conn.commit()
-                logger.info("✅ Database initialized successfully with reporting tables")
+                logger.info("✅ Database initialized successfully with reporting tables and internal conversations")
                 
         except Exception as e:
             logger.error(f"❌ Error initializing database: {e}")

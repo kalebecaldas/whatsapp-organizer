@@ -121,4 +121,47 @@ function generateAvatar(phone) {
   return `https://api.dicebear.com/7.x/initials/svg?seed=${lastTwo}&backgroundColor=25D366&textColor=FFFFFF`;
 }
 
+// API functions for sessions
+export const sessionsAPI = {
+  // Get all sessions for a phone number
+  getSessions: (phone) => api.get(`/conversations/${phone}/sessions`),
+  
+  // Get messages for a specific session
+  getSessionMessages: (phone, sessionId) => 
+    api.get(`/conversations/${phone}/sessions/${sessionId}/messages`),
+};
+
+// API function for uploading media
+export const uploadMedia = async (phone, file, type, onProgress) => {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('phone', phone);
+    formData.append('type', type);
+
+    const response = await api.post('/upload-media', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / progressEvent.total
+          );
+          onProgress(percentCompleted);
+        }
+      },
+      timeout: 300000, // 5 minutes timeout for large files
+    });
+
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading media:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Erro ao fazer upload do arquivo',
+    };
+  }
+};
+
 export default api; 
